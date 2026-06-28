@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전략물자 무허가수출 자가점검 도구</title>
+<script src="vendor/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --line:#334155;
+    --txt:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --info:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Malgun Gothic","맑은 고딕",Segoe UI,sans-serif;
+       background:var(--bg);color:var(--txt);line-height:1.5;font-size:14px}
+  header{padding:20px 28px;background:linear-gradient(90deg,#0c4a6e,#0f172a);
+         border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:20px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  main{max-width:1280px;margin:0 auto;padding:24px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+         padding:18px 20px;margin-bottom:20px}
+  .panel h2{margin:0 0 4px;font-size:15px;color:var(--accent)}
+  .panel .hint{color:var(--muted);font-size:12px;margin:0 0 14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  .filebox{background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:12px}
+  .filebox.loaded{border-style:solid;border-color:var(--ok)}
+  .filebox label.title{display:block;font-weight:600;margin-bottom:2px}
+  .filebox .req{color:var(--bad)}
+  .filebox .opt{color:var(--muted);font-weight:400;font-size:11px}
+  .filebox .desc{color:var(--muted);font-size:11px;margin-bottom:8px}
+  .filebox input[type=file]{width:100%;font-size:12px;color:var(--muted)}
+  .filebox .status{font-size:12px;margin-top:6px;color:var(--muted)}
+  .filebox .status.ok{color:var(--ok)}
+  .sheetsel{margin-top:8px;display:none}
+  .sheetsel.show{display:block}
+  select,input[type=number],input[type=text]{background:#0f172a;color:var(--txt);
+    border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px}
+  select{max-width:100%}
+  .maptable{width:100%;border-collapse:collapse;font-size:12px}
+  .maptable td{padding:4px 6px;border-bottom:1px solid var(--line)}
+  .maptable td:first-child{color:var(--muted);white-space:nowrap;width:140px}
+  .mapgroup{margin-bottom:16px}
+  .mapgroup h3{font-size:13px;margin:0 0 6px;color:#cbd5e1}
+  .settings-row{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:12px;color:var(--muted)}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:14px;font-weight:600;padding:11px 22px}
+  button.primary{background:var(--accent);color:#082f49}
+  button.primary:disabled{background:#475569;color:#94a3b8;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);font-weight:500;font-size:13px;padding:8px 14px}
+  .summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;text-align:center}
+  .card .num{font-size:26px;font-weight:700}
+  .card .lbl{font-size:12px;color:var(--muted);margin-top:2px}
+  .card.bad .num{color:var(--bad)} .card.warn .num{color:var(--warn)}
+  .card.ok .num{color:var(--ok)} .card.info .num{color:var(--info)}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .toolbar input[type=text]{flex:1;min-width:180px}
+  .resultwrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:8px}
+  table.results{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+  table.results th{position:sticky;top:0;background:#0b1220;padding:8px 10px;text-align:left;
+    border-bottom:2px solid var(--line);z-index:2}
+  table.results td{padding:6px 10px;border-bottom:1px solid var(--line)}
+  table.results tr:hover td{background:#1b2840}
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+  .b-ok{background:rgba(34,197,94,.15);color:#4ade80}
+  .b-warn{background:rgba(245,158,11,.15);color:#fbbf24}
+  .b-bad{background:rgba(239,68,68,.18);color:#f87171}
+  .b-info{background:rgba(96,165,250,.15);color:#93c5fd}
+  .b-mute{background:rgba(148,163,184,.15);color:#cbd5e1}
+  tr.flagged td{background:rgba(239,68,68,.06)}
+  .msg{font-size:11px;color:var(--muted);white-space:normal;max-width:320px}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  details.legend{margin-top:14px;font-size:12px;color:var(--muted)}
+  details.legend summary{cursor:pointer;color:var(--accent)}
+  .legend ul{margin:8px 0 0;padding-left:18px}
+  code{background:#0b1220;padding:1px 5px;border-radius:4px;font-size:11px}
+  .warnbanner{background:rgba(245,158,11,.12);border:1px solid var(--warn);color:#fbbf24;
+    padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>전략물자 무허가수출 자가점검 도구</h1>
+  <p>수출신고내역을 판정DB·허가면제·허가DB와 대조하여 전략물자 무허가수출 의심 건을 선별합니다. 모든 처리는 브라우저 내에서만 수행되며 데이터는 외부로 전송되지 않습니다.</p>
+</header>
+<main>
+
+  <!-- ===== 1. 파일 업로드 ===== -->
+  <section class="panel">
+    <h2>1단계 · 파일 업로드</h2>
+    <p class="hint">엑셀(.xlsx/.xls) 또는 CSV. 시트가 여러 개면 업로드 후 시트를 선택하세요.</p>
+    <div class="grid" id="filegrid"></div>
+  </section>
+
+  <!-- ===== 2. 컬럼 매핑 ===== -->
+  <section class="panel" id="mappanel" style="display:none">
+    <h2>2단계 · 컬럼 매핑 확인</h2>
+    <p class="hint">파일 머리글을 자동 인식했습니다. 틀린 항목은 직접 선택해 주세요. (★ 필수)</p>
+    <div id="mapcontainer"></div>
+  </section>
+
+  <!-- ===== 3. 설정 ===== -->
+  <section class="panel" id="setpanel" style="display:none">
+    <h2>3단계 · 판정 기준 설정</h2>
+    <div class="settings-row">
+      <div class="field">
+        <label>허가면제 USD 한도 (건당, 비워두면 한도검증 생략)</label>
+        <input type="number" id="setExemptUsd" placeholder="예: 1000" step="any">
+      </div>
+      <div class="field">
+        <label>허가면제 수량 한도 (건당, 선택)</label>
+        <input type="number" id="setExemptQty" placeholder="예: 5" step="any">
+      </div>
+      <div class="field">
+        <label>환율표 해석 방식</label>
+        <select id="setRateMode">
+          <option value="krw">통화 1단위 = N원 (관세청 고시환율, 기본)</option>
+          <option value="usd">통화 1단위 = N USD (직접 USD환율)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>모델명 매칭 방식</label>
+        <select id="setMatch">
+          <option value="contains">정규화 후 포함매칭 (기본·관대)</option>
+          <option value="exact">정규화 후 완전일치 (엄격)</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 4. 실행 ===== -->
+  <section class="panel" id="runpanel" style="display:none">
+    <h2>4단계 · 분석 실행</h2>
+    <p class="hint">전략물자 선별 → 허가면제/허가 검증 → 무허가 의심건 산출</p>
+    <button class="primary" id="runBtn" disabled>분석 실행</button>
+  </section>
+
+  <!-- ===== 5. 결과 ===== -->
+  <section class="panel" id="resultpanel" style="display:none">
+    <h2>5단계 · 검토 결과</h2>
+    <div id="rateWarn"></div>
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <input type="text" id="filterText" placeholder="모델/신고번호/국가 검색…">
+      <select id="filterStatus"><option value="">전체 상태</option></select>
+      <label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="flagOnly"> 의심건만</label>
+      <button class="ghost" id="exportBtn">결과 엑셀 다운로드</button>
+    </div>
+    <div class="resultwrap">
+      <table class="results" id="resultTable"><thead></thead><tbody></tbody></table>
+    </div>
+    <details class="legend" open>
+      <summary>판정 상태 설명</summary>
+      <ul>
+        <li><span class="badge b-bad">무허가 의심</span> 전략물자 해당이나 허가·면제 기록이 없음 → <b>최우선 확인</b></li>
+        <li><span class="badge b-warn">판정 미실시</span> 판정DB에 모델이 없음. 무허가 수출은 DB에 누락됐을 수 있어 별도 확인 필요</li>
+        <li><span class="badge b-bad">면제 한도초과</span> 허가면제 대상이나 USD 금액/수량이 설정 한도 초과</li>
+        <li><span class="badge b-bad">허가 기간외</span> 모델 허가는 있으나 수출일이 유효기간을 벗어남</li>
+        <li><span class="badge b-warn">USD 산출불가</span> 환율표에 해당 통화/일자가 없어 금액 검증 불가</li>
+        <li><span class="badge b-ok">허가 정상</span> 국가·모델·유효기간 충족</li>
+        <li><span class="badge b-info">면제 정상</span> 허가면제 대상이며 한도 충족(또는 한도 미설정)</li>
+        <li><span class="badge b-mute">비전략물자</span> 판정DB상 비해당</li>
+      </ul>
+    </details>
+  </section>
+
+</main>
+
+<script>
+"use strict";
+
+// ---------- 파일/필드 정의 ----------
+// 각 필드: key, 라벨, 필수여부, 자동인식 키워드(소문자, 공백제거 후 부분일치)
+const FILES = {
+  export: {
+    title:"① 수출신고내역", required:true,
+    desc:"점검 대상. 수출신고번호·모델·수량·금액·통화·신고일자·도착국 포함",
+    fields:[
+      {k:"declNo", l:"수출신고번호", req:true, kw:["수출신고번호","신고번호","신고필증","수리번호","b/l","blno"]},
+      {k:"model",  l:"모델·규격",   req:true, kw:["모델","규격","품명","상품명","modelname","품목"]},
+      {k:"qty",    l:"수량",        req:false,kw:["수량","qty","quantity","수출수량"]},
+      {k:"amount", l:"결제금액(현지화)", req:false, kw:["결제금액","송장금액","인보이스","invoiceamount","금액","amount"]},
+      {k:"currency",l:"결제통화",   req:false, kw:["통화","통화코드","결제통화","currency","화폐"]},
+      {k:"usd",    l:"USD금액(있으면)", req:false, kw:["usd","불","미화","신고가격","fob","usdamount","미불"]},
+      {k:"date",   l:"신고/수리일자", req:true, kw:["신고일","수리일","수출일","일자","date","적재일"]},
+      {k:"country",l:"도착국·국가",  req:false, kw:["도착국","국가","목적국","수입국","destination","country","도착항"]}
+    ]
+  },
+  judge: {
+    title:"② 전략물자 판정DB", required:true,
+    desc:"자가판정·전문판정 결과. 모델별 전략물자 해당/비해당",
+    fields:[
+      {k:"model",  l:"모델명",   req:true, kw:["모델","규격","품명","품목","modelname"]},
+      {k:"result", l:"판정결과", req:true, kw:["판정결과","판정","해당여부","결과","result","해당"]},
+      {k:"type",   l:"판정구분(선택)", req:false, kw:["판정구분","구분","자가","전문","type"]}
+    ]
+  },
+  exempt: {
+    title:"③ 허가면제 신고번호", required:false,
+    desc:"허가면제를 받은 수출건의 수출신고번호 목록 (한도 컬럼 있으면 함께 인식)",
+    fields:[
+      {k:"declNo", l:"수출신고번호", req:true, kw:["수출신고번호","신고번호","신고필증","수리번호"]},
+      {k:"qtyLimit",l:"수량한도(선택)", req:false, kw:["수량한도","허용수량","수량"]},
+      {k:"usdLimit",l:"금액한도USD(선택)", req:false, kw:["금액한도","허용금액","한도","usd","금액"]}
+    ]
+  },
+  license: {
+    title:"④ 국가별 허가DB", required:false,
+    desc:"허가받은 국가·모델명·허가 유효기간",
+    fields:[
+      {k:"country", l:"국가",     req:true, kw:["국가","도착국","수입국","목적국","country","대상국"]},
+      {k:"model",   l:"모델명",   req:true, kw:["모델","규격","품명","품목","modelname"]},
+      {k:"start",   l:"유효기간 시작", req:false, kw:["시작","발급","허가일","유효기간시작","from","startdate"]},
+      {k:"end",     l:"유효기간 종료", req:true, kw:["종료","만료","유효기간","유효기간종료","to","enddate","만료일"]}
+    ]
+  },
+  rate: {
+    title:"⑤ 환율표", required:false,
+    desc:"날짜·통화·환율. 결제금액이 현지화일 때 USD 환산에 사용",
+    fields:[
+      {k:"date",     l:"적용일자", req:true, kw:["일자","날짜","적용일","date","기준일"]},
+      {k:"currency", l:"통화",     req:true, kw:["통화","통화코드","currency","화폐","코드"]},
+      {k:"rate",     l:"환율",     req:true, kw:["환율","rate","매매기준율","고시환율","교환율"]}
+    ]
+  }
+};
+
+// ---------- 상태 ----------
+const state = {}; // perFile: {rows, headers, sheetName, workbook, mapping}
+
+// ---------- 유틸 ----------
+const norm = s => String(s==null?"":s).toUpperCase().replace(/[\s\-_./()]/g,"").trim();
+const headKey = s => String(s==null?"":s).toLowerCase().replace(/[\s\-_./()]/g,"").trim();
+
+function parseDate(v){
+  if(v==null||v==="") return null;
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==="number"){ // Excel serial
+    if(v>20000 && v<60000){ const d=XLSX.SSF.parse_date_code(v); if(d) return new Date(d.y,d.m-1,d.d); }
+  }
+  let s=String(v).trim();
+  let digits=s.replace(/[^0-9]/g,"");
+  if(/^\d{8}$/.test(digits)){ return new Date(+digits.slice(0,4),+digits.slice(4,6)-1,+digits.slice(6,8)); }
+  if(/^\d{6}$/.test(digits)){ // YYMMDD
+    let y=+digits.slice(0,2); y+= y<70?2000:1900;
+    return new Date(y,+digits.slice(2,4)-1,+digits.slice(4,6));
+  }
+  let d=new Date(s); return isNaN(d)?null:d;
+}
+const fmtDate = d => d? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`:"";
+const toNum = v => { if(v==null||v==="") return null; let n=parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?null:n; };
+
+// ---------- 파일 로드 ----------
+function buildFileBoxes(){
+  const grid=document.getElementById("filegrid");
+  grid.innerHTML="";
+  for(const id in FILES){
+    const f=FILES[id];
+    const box=document.createElement("div");
+    box.className="filebox"; box.id="box-"+id;
+    box.innerHTML=`
+      <label class="title">${f.title} ${f.required?'<span class="req">★</span>':'<span class="opt">(선택)</span>'}</label>
+      <div class="desc">${f.desc}</div>
+      <input type="file" accept=".xlsx,.xls,.csv" data-file="${id}">
+      <div class="sheetsel" id="sheet-${id}">시트: <select data-sheet="${id}"></select></div>
+      <div class="status" id="status-${id}">미선택</div>`;
+    grid.appendChild(box);
+  }
+  grid.querySelectorAll('input[type=file]').forEach(inp=>inp.addEventListener("change",onFile));
+  grid.querySelectorAll('select[data-sheet]').forEach(sel=>sel.addEventListener("change",e=>{
+    const id=e.target.dataset.sheet; loadSheet(id, e.target.value);
+  }));
+}
+
+function onFile(e){
+  const id=e.target.dataset.file; const file=e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:"array",cellDates:true});
+      state[id]={workbook:wb};
+      const sheetSel=document.querySelector(`select[data-sheet="${id}"]`);
+      sheetSel.innerHTML=wb.SheetNames.map(n=>`<option>${n}</option>`).join("");
+      document.getElementById("sheet-"+id).classList.toggle("show", wb.SheetNames.length>1);
+      loadSheet(id, wb.SheetNames[0]);
+    }catch(err){ setStatus(id,"읽기 실패: "+err.message,false); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadSheet(id, sheetName){
+  const wb=state[id].workbook;
+  const ws=wb.Sheets[sheetName];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});
+  const headers = rows.length? Object.keys(rows[0]) : [];
+  state[id]={...state[id], rows, headers, sheetName};
+  autoMap(id);
+  setStatus(id, `${rows.length}행 · ${headers.length}열 로드`, true);
+  document.getElementById("box-"+id).classList.add("loaded");
+  refreshUI();
+}
+
+function setStatus(id,msg,ok){
+  const el=document.getElementById("status-"+id);
+  el.textContent=msg; el.className="status"+(ok?" ok":"");
+}
+
+// 헤더 자동 매핑
+function autoMap(id){
+  const f=FILES[id], st=state[id];
+  st.mapping={};
+  const hk = st.headers.map(h=>({h, k:headKey(h)}));
+  for(const fld of f.fields){
+    let found="";
+    // 1) 키워드 포함 우선순위대로
+    for(const kw of fld.kw){
+      const m=hk.find(x=>x.k.includes(kw));
+      if(m){ found=m.h; break; }
+    }
+    st.mapping[fld.k]=found;
+  }
+}
+
+// ---------- 매핑 UI ----------
+function renderMapping(){
+  const cont=document.getElementById("mapcontainer");
+  cont.innerHTML="";
+  let any=false;
+  for(const id in FILES){
+    const st=state[id]; if(!st||!st.rows) continue;
+    any=true;
+    const f=FILES[id];
+    const g=document.createElement("div"); g.className="mapgroup";
+    let html=`<h3>${f.title} <span style="color:var(--muted);font-weight:400">(${st.sheetName}, ${st.rows.length}행)</span></h3><table class="maptable">`;
+    for(const fld of f.fields){
+      const opts=['<option value="">— 없음 —</option>']
+        .concat(st.headers.map(h=>`<option ${st.mapping[fld.k]===h?"selected":""}>${h}</option>`)).join("");
+      html+=`<tr><td>${fld.l}${fld.req?' <span class="req">★</span>':''}</td>
+             <td><select data-map="${id}" data-fld="${fld.k}">${opts}</select></td></tr>`;
+    }
+    html+="</table>"; g.innerHTML=html; cont.appendChild(g);
+  }
+  document.getElementById("mappanel").style.display = any?"block":"none";
+  cont.querySelectorAll("select[data-map]").forEach(sel=>sel.addEventListener("change",e=>{
+    state[e.target.dataset.map].mapping[e.target.dataset.fld]=e.target.value;
+    validateRun();
+  }));
+}
+
+function refreshUI(){
+  renderMapping();
+  ["setpanel","runpanel"].forEach(p=>document.getElementById(p).style.display = state.export&&state.export.rows ? "block":"none");
+  validateRun();
+}
+
+function validateRun(){
+  const btn=document.getElementById("runBtn");
+  let ok = state.export&&state.export.rows && state.judge&&state.judge.rows;
+  // 필수 매핑 확인
+  if(ok){
+    for(const id of ["export","judge"]){
+      for(const fld of FILES[id].fields){
+        if(fld.req && !state[id].mapping[fld.k]){ ok=false; }
+      }
+    }
+  }
+  btn.disabled=!ok;
+}
+
+// ---------- 환율 ----------
+function buildRateIndex(){
+  // currency -> [{date, rate}] sorted by date asc
+  const idx={}; const st=state.rate;
+  if(!st||!st.rows) return idx;
+  const m=st.mapping;
+  for(const r of st.rows){
+    const cur=norm(r[m.currency]); const d=parseDate(r[m.date]); const rate=toNum(r[m.rate]);
+    if(!cur||!d||rate==null) continue;
+    (idx[cur]=idx[cur]||[]).push({t:d.getTime(), rate});
+  }
+  for(const c in idx) idx[c].sort((a,b)=>a.t-b.t);
+  return idx;
+}
+function rateOn(idx, cur, date){
+  const arr=idx[norm(cur)]; if(!arr||!date) return null;
+  const t=date.getTime();
+  // 해당일 이하 가장 가까운 값, 없으면 가장 이른 값
+  let best=null;
+  for(const e of arr){ if(e.t<=t) best=e; else break; }
+  if(!best) best=arr[0];
+  return best?best.rate:null;
+}
+
+// 결제금액(현지화) -> USD
+function toUSD(amount, currency, date, rateIdx, mode){
+  if(amount==null) return {usd:null, note:"금액없음"};
+  const cur=norm(currency)||"USD";
+  if(cur==="USD"||cur==="US"||cur==="USD$") return {usd:amount, note:"USD"};
+  const r=rateOn(rateIdx,cur,date);
+  if(r==null) return {usd:null, note:`환율없음(${cur})`};
+  if(mode==="usd"){ // 통화1단위 = r USD
+    return {usd:amount*r, note:`${cur}×${r}`};
+  }
+  // 기본 KRW: 통화1단위 = r 원 → USD = (amount*r)/(USD원)
+  const usdKrw=rateOn(rateIdx,"USD",date);
+  if(usdKrw==null) return {usd:null, note:"USD고시환율없음"};
+  return {usd: amount*r/usdKrw, note:`${cur}${r}원/USD${usdKrw}원`};
+}
+
+// ---------- 판정DB 인덱스 ----------
+function buildJudgeIndex(){
+  const st=state.judge, m=st.mapping, idx=[];
+  for(const r of st.rows){
+    const model=r[m.model]; if(model==="") continue;
+    const res=String(r[m.result]||"");
+    // 비해당/해당 판단
+    const isNo = /비해당|해당없|불해당|아니|n\/?a|no\b|미해당/i.test(res) || /비대상/i.test(res);
+    const isYes = !isNo && /해당|대상|yes|y\b|전략/i.test(res);
+    idx.push({modelN:norm(model), raw:model, result:res, isStrategic: isYes && !isNo, decided:true,
+              type: m.type? r[m.type]:""});
+  }
+  return idx;
+}
+// 모델 매칭: exact 또는 contains
+function findJudge(jidx, modelN, mode){
+  if(!modelN) return null;
+  // 완전일치 우선
+  let hit=jidx.find(j=>j.modelN===modelN);
+  if(hit) return hit;
+  if(mode==="exact") return null;
+  // 포함: DB모델이 수출모델에 포함되거나 그 반대 (긴쪽 기준 충돌 줄이려 길이>=3)
+  hit=jidx.filter(j=>j.modelN.length>=3 && (modelN.includes(j.modelN)||j.modelN.includes(modelN)))
+        .sort((a,b)=>b.modelN.length-a.modelN.length)[0];
+  return hit||null;
+}
+
+// ---------- 허가DB ----------
+function buildLicenseIndex(){
+  const st=state.license; const list=[];
+  if(!st||!st.rows) return list;
+  const m=st.mapping;
+  for(const r of st.rows){
+    const model=r[m.model]; if(model==="") continue;
+    list.push({modelN:norm(model), raw:model, countryN:norm(r[m.country]), rawCountry:r[m.country],
+      start: m.start? parseDate(r[m.start]):null, end: parseDate(r[m.end])});
+  }
+  return list;
+}
+function countryMatch(a,b){
+  if(!a||!b) return false;
+  if(a===b) return true;
+  return a.length>=2 && b.length>=2 && (a.includes(b)||b.includes(a));
+}
+function findLicense(lidx, modelN, countryN, date, mode){
+  const cands=lidx.filter(l=>{
+    const mm = mode==="exact"? l.modelN===modelN
+             : (l.modelN===modelN || (l.modelN.length>=3 && (modelN.includes(l.modelN)||l.modelN.includes(modelN))));
+    return mm;
+  });
+  if(!cands.length) return {match:null, modelFound:false, countryFound:false, inDate:false};
+  const cc=cands.filter(l=>!l.countryN || countryMatch(l.countryN,countryN));
+  const countryFound=cc.length>0;
+  const pool=countryFound?cc:cands;
+  for(const l of pool){
+    const okStart = !l.start || (date && date>=l.start);
+    const okEnd   = !l.end   || (date && date<=l.end);
+    if(okStart&&okEnd && (l.countryN? countryMatch(l.countryN,countryN):true))
+      return {match:l, modelFound:true, countryFound:true, inDate:true};
+  }
+  return {match:null, modelFound:true, countryFound, inDate:false, sample:pool[0]};
+}
+
+// ---------- 허가면제 ----------
+function buildExemptIndex(){
+  const st=state.exempt; const map={};
+  if(!st||!st.rows) return map;
+  const m=st.mapping;
+  for(const r of st.rows){
+    const no=norm(r[m.declNo]); if(!no) continue;
+    map[no]={qtyLimit: m.qtyLimit? toNum(r[m.qtyLimit]):null, usdLimit: m.usdLimit? toNum(r[m.usdLimit]):null};
+  }
+  return map;
+}
+
+// ---------- 분석 실행 ----------
+const STATUS={
+  SUSPECT:{l:"무허가 의심",c:"b-bad",flag:true},
+  UNJUDGED:{l:"판정 미실시",c:"b-warn",flag:true},
+  EXEMPT_OVER:{l:"면제 한도초과",c:"b-bad",flag:true},
+  LIC_EXPIRED:{l:"허가 기간외",c:"b-bad",flag:true},
+  NO_USD:{l:"USD 산출불가",c:"b-warn",flag:true},
+  LIC_OK:{l:"허가 정상",c:"b-ok",flag:false},
+  EXEMPT_OK:{l:"면제 정상",c:"b-info",flag:false},
+  NOT_STRATEGIC:{l:"비전략물자",c:"b-mute",flag:false}
+};
+
+let RESULTS=[];
+
+function runAnalysis(){
+  const setExemptUsd=toNum(document.getElementById("setExemptUsd").value);
+  const setExemptQty=toNum(document.getElementById("setExemptQty").value);
+  const rateMode=document.getElementById("setRateMode").value;
+  const matchMode=document.getElementById("setMatch").value;
+
+  const jidx=buildJudgeIndex();
+  const lidx=buildLicenseIndex();
+  const exMap=buildExemptIndex();
+  const rateIdx=buildRateIndex();
+
+  const em=state.export.mapping;
+  let missingRate=false;
+  RESULTS=state.export.rows.map((r,i)=>{
+    const declNo=r[em.declNo]; const declNoN=norm(declNo);
+    const model=r[em.model]; const modelN=norm(model);
+    const qty=em.qty? toNum(r[em.qty]):null;
+    const amount=em.amount? toNum(r[em.amount]):null;
+    const currency=em.currency? r[em.currency]:"";
+    const date=em.date? parseDate(r[em.date]):null;
+    const country=em.country? r[em.country]:"";
+    const countryN=norm(country);
+
+    // USD 금액 산출 (USD컬럼 우선)
+    let usd=null, usdNote="";
+    if(em.usd && toNum(r[em.usd])!=null){ usd=toNum(r[em.usd]); usdNote="신고서 USD"; }
+    else { const c=toUSD(amount,currency,date,rateIdx,rateMode); usd=c.usd; usdNote=c.note; }
+
+    // 1) 전략물자 선별
+    const j=findJudge(jidx,modelN,matchMode);
+    let status, msg="";
+    if(!j){
+      status="UNJUDGED"; msg="판정DB에 모델 없음 → 무허가 수출은 DB 누락 가능, 별도 판정 필요";
+    } else if(!j.isStrategic){
+      status="NOT_STRATEGIC"; msg=`판정: ${j.result||"비해당"}`;
+    } else {
+      // 전략물자 해당 → 허가/면제 검증
+      const isExempt = exMap.hasOwnProperty(declNoN);
+      const lic = findLicense(lidx,modelN,countryN,date,matchMode);
+      if(isExempt){
+        const lim=exMap[declNoN];
+        const usdLimit = lim.usdLimit!=null?lim.usdLimit:setExemptUsd;
+        const qtyLimit = lim.qtyLimit!=null?lim.qtyLimit:setExemptQty;
+        let over=[];
+        if(usdLimit!=null){
+          if(usd==null){ status="NO_USD"; msg=`면제 금액검증 불가(${usdNote})`; }
+          else if(usd>usdLimit) over.push(`USD ${usd.toFixed(2)} > 한도 ${usdLimit}`);
+        }
+        if(qtyLimit!=null && qty!=null && qty>qtyLimit) over.push(`수량 ${qty} > 한도 ${qtyLimit}`);
+        if(status!=="NO_USD"){
+          if(over.length){ status="EXEMPT_OVER"; msg="면제 한도초과: "+over.join("; "); }
+          else { status="EXEMPT_OK"; msg=`허가면제 대상 (USD ${usd!=null?usd.toFixed(2):"-"})`; }
+        }
+      } else if(lic.match){
+        status="LIC_OK"; msg=`허가: ${lic.match.rawCountry||"-"} / 유효 ~${fmtDate(lic.match.end)}`;
+      } else if(lic.modelFound && !lic.inDate){
+        status="LIC_EXPIRED";
+        msg=`모델 허가는 있으나 ${lic.countryFound?"수출일이 유효기간 밖":"국가 불일치"}`
+          + (lic.sample?` (예: ~${fmtDate(lic.sample.end)})`:"");
+      } else {
+        status="SUSPECT"; msg="전략물자 해당이나 허가·면제 기록 없음";
+      }
+    }
+    if(status==="NO_USD") missingRate=true;
+    return {i:i+1, declNo, model, qty, amount, currency, usd, usdNote,
+            country, date:fmtDate(date), status, msg,
+            judge:j?(j.isStrategic?"해당":"비해당"):"미등재"};
+  });
+
+  renderResults(missingRate);
+}
+
+// ---------- 결과 렌더 ----------
+function renderResults(missingRate){
+  document.getElementById("resultpanel").style.display="block";
+  // 환율 경고
+  const rw=document.getElementById("rateWarn");
+  rw.innerHTML = missingRate && (!state.rate||!state.rate.rows)
+    ? `<div class="warnbanner">⚠ 일부 건의 USD 산출에 실패했습니다. 환율표(⑤)를 업로드하면 현지화 금액을 USD로 환산해 면제 한도검증이 가능합니다.</div>`
+    : (missingRate? `<div class="warnbanner">⚠ 일부 통화/일자가 환율표에 없어 USD 산출이 안 된 건이 있습니다.</div>`:"");
+
+  // 요약
+  const counts={};
+  RESULTS.forEach(r=>counts[r.status]=(counts[r.status]||0)+1);
+  const order=["SUSPECT","UNJUDGED","EXEMPT_OVER","LIC_EXPIRED","NO_USD","LIC_OK","EXEMPT_OK","NOT_STRATEGIC"];
+  const sum=document.getElementById("summary");
+  const flagged=RESULTS.filter(r=>STATUS[r.status].flag).length;
+  let cards=`<div class="card ${flagged?'bad':'ok'}"><div class="num">${flagged}</div><div class="lbl">확인 필요 합계</div></div>
+             <div class="card"><div class="num">${RESULTS.length}</div><div class="lbl">총 신고건</div></div>`;
+  cards+=order.filter(s=>counts[s]).map(s=>{
+    const st=STATUS[s]; const cls=st.flag?(s==="UNJUDGED"||s==="NO_USD"?"warn":"bad"):(s==="LIC_OK"?"ok":s==="EXEMPT_OK"?"info":"");
+    return `<div class="card ${cls}"><div class="num">${counts[s]}</div><div class="lbl">${st.l}</div></div>`;
+  }).join("");
+  sum.innerHTML=cards;
+
+  // 상태 필터 옵션
+  const fs=document.getElementById("filterStatus");
+  fs.innerHTML='<option value="">전체 상태</option>'+order.filter(s=>counts[s]).map(s=>`<option value="${s}">${STATUS[s].l} (${counts[s]})</option>`).join("");
+
+  drawTable();
+}
+
+function drawTable(){
+  const txt=document.getElementById("filterText").value.trim().toLowerCase();
+  const fStatus=document.getElementById("filterStatus").value;
+  const flagOnly=document.getElementById("flagOnly").checked;
+  const thead=document.querySelector("#resultTable thead");
+  const tbody=document.querySelector("#resultTable tbody");
+  thead.innerHTML=`<tr><th>#</th><th>상태</th><th>수출신고번호</th><th>모델·규격</th><th>판정</th>
+    <th>도착국</th><th>신고일</th><th>수량</th><th>결제금액</th><th>통화</th><th>USD</th><th>근거/메모</th></tr>`;
+  // 의심건 우선 정렬
+  const rank=s=>STATUS[s].flag?0:1;
+  const rows=RESULTS.filter(r=>{
+    if(flagOnly && !STATUS[r.status].flag) return false;
+    if(fStatus && r.status!==fStatus) return false;
+    if(txt){ const hay=`${r.declNo} ${r.model} ${r.country}`.toLowerCase(); if(!hay.includes(txt)) return false; }
+    return true;
+  }).sort((a,b)=>rank(a.status)-rank(b.status)|| a.i-b.i);
+
+  if(!rows.length){ tbody.innerHTML=`<tr><td colspan="12" class="empty">해당 결과 없음</td></tr>`; return; }
+  tbody.innerHTML=rows.map(r=>{
+    const st=STATUS[r.status];
+    return `<tr class="${st.flag?'flagged':''}">
+      <td>${r.i}</td>
+      <td><span class="badge ${st.c}">${st.l}</span></td>
+      <td>${r.declNo??""}</td>
+      <td>${r.model??""}</td>
+      <td>${r.judge}</td>
+      <td>${r.country??""}</td>
+      <td>${r.date}</td>
+      <td>${r.qty??""}</td>
+      <td>${r.amount!=null?r.amount.toLocaleString():""}</td>
+      <td>${r.currency??""}</td>
+      <td>${r.usd!=null?r.usd.toLocaleString(undefined,{maximumFractionDigits:2}):"-"}</td>
+      <td class="msg">${r.msg}</td></tr>`;
+  }).join("");
+}
+
+// ---------- 결과 내보내기 ----------
+function exportResults(){
+  if(!RESULTS.length) return;
+  const data=RESULTS.map(r=>({
+    "#":r.i, "판정상태":STATUS[r.status].l, "수출신고번호":r.declNo, "모델·규격":r.model,
+    "전략물자판정":r.judge, "도착국":r.country, "신고일":r.date, "수량":r.qty,
+    "결제금액":r.amount, "통화":r.currency, "USD환산":r.usd!=null?Number(r.usd.toFixed(2)):"",
+    "USD근거":r.usdNote, "근거/메모":r.msg
+  }));
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"점검결과");
+  XLSX.writeFile(wb, `전략물자_점검결과_${fmtDate(new Date())}.xlsx`);
+}
+
+// ---------- 이벤트 ----------
+buildFileBoxes();
+document.getElementById("runBtn").addEventListener("click",runAnalysis);
+document.getElementById("exportBtn").addEventListener("click",exportResults);
+["filterText","filterStatus","flagOnly"].forEach(id=>{
+  document.getElementById(id).addEventListener("input",drawTable);
+  document.getElementById(id).addEventListener("change",drawTable);
+});
+</script>
+</body>
+</html>
