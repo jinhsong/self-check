@@ -7,104 +7,176 @@
 <script src="vendor/xlsx.full.min.js"></script>
 <style>
   :root{
-    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --line:#334155;
-    --txt:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8;
-    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --info:#60a5fa;
+    --bg:#F4EEE4;        /* 따뜻한 크림 배경 */
+    --panel:#FFFFFF;     /* 흰 카드 */
+    --panel2:#FAF6EF;    /* 카드 내부 연한 베이지 */
+    --line:#E6DCCB;      /* 따뜻한 경계선 */
+    --line2:#EFE7D9;
+    --txt:#232A33;       /* 짙은 네이비-블랙 */
+    --muted:#8A8273;     /* 따뜻한 회색 */
+    --navy:#22304B;      /* 주요 버튼/제목 */
+    --navy-d:#1A2640;
+    --accent:#9B6A43;    /* 브라운/탠 포인트 */
+    --accent-soft:#ECE2D2;
+    --ok:#2E7D5B; --warn:#A9701A; --bad:#BE3A2B; --info:#2F6DB0;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,"Malgun Gothic","맑은 고딕",Segoe UI,sans-serif;
-       background:var(--bg);color:var(--txt);line-height:1.5;font-size:14px}
-  header{padding:20px 28px;background:linear-gradient(90deg,#0c4a6e,#0f172a);
-         border-bottom:1px solid var(--line)}
-  header h1{margin:0;font-size:20px}
-  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
-  main{max-width:1280px;margin:0 auto;padding:24px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-         padding:18px 20px;margin-bottom:20px}
-  .panel h2{margin:0 0 4px;font-size:15px;color:var(--accent)}
-  .panel .hint{color:var(--muted);font-size:12px;margin:0 0 14px}
+  body{margin:0;font-family:-apple-system,"Noto Sans KR","Malgun Gothic","맑은 고딕",Segoe UI,sans-serif;
+       background:var(--bg);color:var(--txt);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased}
+
+  /* ===== 헤더 ===== */
+  header{background:var(--panel);border-bottom:1px solid var(--line)}
+  .brand{max-width:1280px;margin:0 auto;padding:18px 28px;display:flex;align-items:center;gap:16px}
+  .logo{width:54px;height:54px;border-radius:50%;border:2px solid var(--accent);color:var(--accent);
+        display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex:none;letter-spacing:1px}
+  .brand-text{flex:1;min-width:0}
+  .brand-text h1{margin:0;font-size:21px;font-weight:800;color:var(--navy);letter-spacing:-.3px}
+  .brand-text .sub{margin:3px 0 0;font-size:11px;color:var(--accent);letter-spacing:2.5px;font-weight:600}
+  .faq-pill{flex:none;background:var(--panel);border:1.5px solid var(--accent);color:var(--accent);
+        font-weight:700;font-size:13px;border-radius:999px;padding:7px 18px;cursor:pointer}
+  .faq-pill:hover{background:var(--accent-soft)}
+  /* ===== 스텝 칩 네비 ===== */
+  .stepnav{max-width:1280px;margin:0 auto;padding:0 28px 14px;display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--accent-soft);color:var(--navy);border:none;border-bottom:2.5px solid transparent;
+        border-radius:8px 8px 4px 4px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:none}
+  .chip .n{color:var(--accent);font-weight:800;margin-right:5px}
+  .chip:hover{background:#E3D7C2}
+  .chip.active{background:var(--panel);border-bottom-color:var(--accent)}
+
+  main{max-width:1280px;margin:0 auto;padding:24px 28px 60px}
+  .lead{margin:6px 0 22px}
+  .lead .kicker{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:1px}
+  .lead h2{margin:6px 0 8px;font-size:25px;font-weight:800;color:var(--navy);letter-spacing:-.5px}
+  .lead p{margin:0;color:var(--muted);font-size:14px;max-width:760px}
+
+  /* ===== 카드(패널) ===== */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+         padding:22px 24px;margin-bottom:18px;box-shadow:0 1px 2px rgba(60,45,20,.04)}
+  .panel h2{margin:0 0 4px;font-size:17px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:10px}
+  .step-no{width:26px;height:26px;flex:none;border:1.5px solid var(--accent);color:var(--accent);
+        border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+  .panel .hint{color:var(--muted);font-size:12.5px;margin:2px 0 16px}
+  .divider{height:1px;background:var(--line2);margin:0 0 16px}
+
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
-  .filebox{background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:12px}
-  .filebox.loaded{border-style:solid;border-color:var(--ok)}
-  .filebox label.title{display:block;font-weight:600;margin-bottom:2px}
+  .filebox{background:var(--panel2);border:1px dashed var(--line);border-radius:12px;padding:14px}
+  .filebox.loaded{border-style:solid;border-color:var(--ok);background:#F4F8F4}
+  .filebox label.title{display:block;font-weight:700;margin-bottom:2px;color:var(--navy)}
   .filebox .req{color:var(--bad)}
   .filebox .opt{color:var(--muted);font-weight:400;font-size:11px}
-  .filebox .desc{color:var(--muted);font-size:11px;margin-bottom:8px}
+  .filebox .desc{color:var(--muted);font-size:11px;margin-bottom:10px}
   .filebox input[type=file]{width:100%;font-size:12px;color:var(--muted)}
-  .filebox .status{font-size:12px;margin-top:6px;color:var(--muted)}
-  .filebox .status.ok{color:var(--ok)}
+  .filebox input[type=file]::file-selector-button{background:var(--navy);color:#fff;border:none;
+        border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;margin-right:10px;cursor:pointer}
+  .filebox .status{font-size:12px;margin-top:8px;color:var(--muted)}
+  .filebox .status.ok{color:var(--ok);font-weight:600}
   .sheetsel{margin-top:8px;display:none}
   .sheetsel.show{display:block}
-  select,input[type=number],input[type=text]{background:#0f172a;color:var(--txt);
-    border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px}
+  select,input[type=number],input[type=text]{background:var(--panel);color:var(--txt);
+    border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
   select{max-width:100%}
   .maptable{width:100%;border-collapse:collapse;font-size:12px}
-  .maptable td{padding:4px 6px;border-bottom:1px solid var(--line)}
+  .maptable td{padding:5px 6px;border-bottom:1px solid var(--line2)}
   .maptable td:first-child{color:var(--muted);white-space:nowrap;width:140px}
   .mapgroup{margin-bottom:16px}
-  .mapgroup h3{font-size:13px;margin:0 0 6px;color:#cbd5e1}
+  .mapgroup h3{font-size:13px;margin:0 0 6px;color:var(--navy);font-weight:700}
   .settings-row{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
-  .field{display:flex;flex-direction:column;gap:4px}
-  .field label{font-size:12px;color:var(--muted)}
-  button{cursor:pointer;border:none;border-radius:8px;font-size:14px;font-weight:600;padding:11px 22px}
-  button.primary{background:var(--accent);color:#082f49}
-  button.primary:disabled{background:#475569;color:#94a3b8;cursor:not-allowed}
-  button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);font-weight:500;font-size:13px;padding:8px 14px}
-  .summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-  .card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;text-align:center}
-  .card .num{font-size:26px;font-weight:700}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:12px;color:var(--muted);font-weight:600}
+  button{cursor:pointer;border:none;border-radius:10px;font-size:14px;font-weight:700;padding:11px 24px;font-family:inherit}
+  button.primary{background:var(--navy);color:#fff}
+  button.primary:hover{background:var(--navy-d)}
+  button.primary:disabled{background:#C9C0AF;color:#fff;cursor:not-allowed}
+  button.ghost{background:var(--panel);border:1px solid var(--line);color:var(--navy);font-weight:600;font-size:13px;padding:9px 16px}
+  button.ghost:hover{background:var(--panel2)}
+  .summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center}
+  .card .num{font-size:27px;font-weight:800;color:var(--navy)}
   .card .lbl{font-size:12px;color:var(--muted);margin-top:2px}
-  .card.bad .num{color:var(--bad)} .card.warn .num{color:var(--warn)}
-  .card.ok .num{color:var(--ok)} .card.info .num{color:var(--info)}
-  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .card.bad{background:#FBEEEB;border-color:#EAcdc6} .card.bad .num{color:var(--bad)}
+  .card.warn{background:#FBF3E2;border-color:#EBDcbb} .card.warn .num{color:var(--warn)}
+  .card.ok{background:#EEF6EF;border-color:#CDE6D2} .card.ok .num{color:var(--ok)}
+  .card.info{background:#EAF1F9;border-color:#CADCEE} .card.info .num{color:var(--info)}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
   .toolbar input[type=text]{flex:1;min-width:180px}
-  .resultwrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:8px}
-  table.results{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
-  table.results th{position:sticky;top:0;background:#0b1220;padding:8px 10px;text-align:left;
-    border-bottom:2px solid var(--line);z-index:2}
-  table.results td{padding:6px 10px;border-bottom:1px solid var(--line)}
-  table.results tr:hover td{background:#1b2840}
-  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
-  .b-ok{background:rgba(34,197,94,.15);color:#4ade80}
-  .b-warn{background:rgba(245,158,11,.15);color:#fbbf24}
-  .b-bad{background:rgba(239,68,68,.18);color:#f87171}
-  .b-info{background:rgba(96,165,250,.15);color:#93c5fd}
-  .b-mute{background:rgba(148,163,184,.15);color:#cbd5e1}
-  tr.flagged td{background:rgba(239,68,68,.06)}
+  .resultwrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:12px}
+  table.results{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;background:var(--panel)}
+  table.results th{position:sticky;top:0;background:#F0E8DA;color:var(--navy);padding:9px 10px;text-align:left;
+    border-bottom:2px solid var(--line);z-index:2;font-weight:700}
+  table.results td{padding:7px 10px;border-bottom:1px solid var(--line2)}
+  table.results tr:hover td{background:#FBF7F0}
+  .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+  .b-ok{background:#E3F1E8;color:#256b4d}
+  .b-warn{background:#FAEFD5;color:#8f5e15}
+  .b-bad{background:#F8E1DC;color:#a8311f}
+  .b-info{background:#E3EEF9;color:#285c93}
+  .b-mute{background:#ECE5D8;color:#6f6757}
+  tr.flagged td{background:#FCF4F2}
+  tr.flagged:hover td{background:#FBEDE9}
   .msg{font-size:11px;color:var(--muted);white-space:normal;max-width:320px}
   .empty{padding:40px;text-align:center;color:var(--muted)}
-  details.legend{margin-top:14px;font-size:12px;color:var(--muted)}
-  details.legend summary{cursor:pointer;color:var(--accent)}
-  .legend ul{margin:8px 0 0;padding-left:18px}
-  code{background:#0b1220;padding:1px 5px;border-radius:4px;font-size:11px}
-  .warnbanner{background:rgba(245,158,11,.12);border:1px solid var(--warn);color:#fbbf24;
-    padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:14px}
+  details.legend{margin-top:16px;font-size:12px;color:var(--muted);background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  details.legend summary{cursor:pointer;color:var(--navy);font-weight:700;font-size:13px}
+  .legend ul{margin:10px 0 0;padding-left:18px;line-height:1.8}
+  code{background:var(--accent-soft);padding:1px 6px;border-radius:5px;font-size:11px;color:var(--accent)}
+  .warnbanner{background:#FBF3E2;border:1px solid #E3C98C;color:#8f5e15;
+    padding:10px 14px;border-radius:10px;font-size:12.5px;margin-bottom:14px}
+  .footnote{max-width:1280px;margin:8px auto 0;padding:0 28px;text-align:center;color:var(--muted);font-size:12px}
+  dialog{border:1px solid var(--line);border-radius:16px;padding:0;max-width:560px;color:var(--txt);box-shadow:0 20px 50px rgba(40,30,10,.25)}
+  dialog::backdrop{background:rgba(40,30,15,.35)}
+  .dlg-body{padding:24px 26px}
+  .dlg-body h3{margin:0 0 12px;color:var(--navy);font-size:18px}
+  .dlg-body ol{margin:0;padding-left:20px;line-height:1.9;font-size:13px}
+  .dlg-foot{padding:14px 26px;border-top:1px solid var(--line2);text-align:right}
 </style>
 </head>
 <body>
 <header>
-  <h1>전략물자 무허가수출 자가점검 도구</h1>
-  <p>수출신고내역을 판정DB·허가면제·허가DB와 대조하여 전략물자 무허가수출 의심 건을 선별합니다. 모든 처리는 브라우저 내에서만 수행되며 데이터는 외부로 전송되지 않습니다.</p>
+  <div class="brand">
+    <div class="logo">수출</div>
+    <div class="brand-text">
+      <h1>전략물자 무허가수출 자가점검 도구</h1>
+      <p class="sub">STRATEGIC GOODS · EXPORT SELF-CHECK</p>
+    </div>
+    <button class="faq-pill" id="faqBtn">FAQ</button>
+  </div>
+  <nav class="stepnav">
+    <a class="chip active" href="#step1" data-target="step1"><span class="n">1</span>파일 업로드</a>
+    <a class="chip" href="#mappanel" data-target="mappanel"><span class="n">2</span>컬럼 매핑</a>
+    <a class="chip" href="#setpanel" data-target="setpanel"><span class="n">3</span>기준 설정</a>
+    <a class="chip" href="#runpanel" data-target="runpanel"><span class="n">4</span>분석 실행</a>
+    <a class="chip" href="#resultpanel" data-target="resultpanel"><span class="n">5</span>검토 결과</a>
+  </nav>
 </header>
 <main>
+  <div class="lead">
+    <div class="kicker">전략물자 무허가수출 자가점검</div>
+    <h2>수출신고내역 전략물자 통제 검토</h2>
+    <p>수출신고내역을 판정DB·허가면제·허가DB와 대조하여 전략물자 무허가수출 의심 건을 선별합니다. 모든 처리는 브라우저 내에서만 수행되며 데이터는 외부로 전송되지 않습니다.</p>
+  </div>
 
   <!-- ===== 1. 파일 업로드 ===== -->
-  <section class="panel">
-    <h2>1단계 · 파일 업로드</h2>
+  <section class="panel" id="step1">
+    <h2><span class="step-no">1</span> 파일 업로드</h2>
     <p class="hint">엑셀(.xlsx/.xls) 또는 CSV. 시트가 여러 개면 업로드 후 시트를 선택하세요.</p>
+    <div class="divider"></div>
     <div class="grid" id="filegrid"></div>
   </section>
 
   <!-- ===== 2. 컬럼 매핑 ===== -->
   <section class="panel" id="mappanel" style="display:none">
-    <h2>2단계 · 컬럼 매핑 확인</h2>
+    <h2><span class="step-no">2</span> 컬럼 매핑 확인</h2>
     <p class="hint">파일 머리글을 자동 인식했습니다. 틀린 항목은 직접 선택해 주세요. (★ 필수)</p>
+    <div class="divider"></div>
     <div id="mapcontainer"></div>
   </section>
 
   <!-- ===== 3. 설정 ===== -->
   <section class="panel" id="setpanel" style="display:none">
-    <h2>3단계 · 판정 기준 설정</h2>
+    <h2><span class="step-no">3</span> 판정 기준 설정</h2>
+    <div class="divider"></div>
     <div class="settings-row">
       <div class="field">
         <label>허가면제 USD 한도 (건당, 비워두면 한도검증 생략)</label>
@@ -137,14 +209,15 @@
 
   <!-- ===== 4. 실행 ===== -->
   <section class="panel" id="runpanel" style="display:none">
-    <h2>4단계 · 분석 실행</h2>
+    <h2><span class="step-no">4</span> 분석 실행</h2>
     <p class="hint">전략물자 선별 → 허가면제/허가 검증 → 무허가 의심건 산출</p>
     <button class="primary" id="runBtn" disabled>분석 실행</button>
   </section>
 
   <!-- ===== 5. 결과 ===== -->
   <section class="panel" id="resultpanel" style="display:none">
-    <h2>5단계 · 검토 결과</h2>
+    <h2><span class="step-no">5</span> 검토 결과</h2>
+    <div class="divider"></div>
     <div id="rateWarn"></div>
     <div class="summary" id="summary"></div>
     <div class="toolbar">
@@ -174,7 +247,23 @@
     </details>
   </section>
 
+  <p class="footnote">사내 전략물자 무허가수출 자가점검 보조 도구 · 최종 책임은 수출 담당 부서의 검토에 따릅니다.</p>
 </main>
+
+<dialog id="faqDialog">
+  <div class="dlg-body">
+    <h3>사용 안내 (FAQ)</h3>
+    <ol>
+      <li><b>파일 업로드</b> — ① 수출신고내역(필수), ② 판정DB(필수), ③ 허가면제 목록, ④ 허가DB, ⑤ 환율표를 올립니다.</li>
+      <li><b>컬럼 매핑</b> — 머리글을 자동 인식합니다. 빗나간 항목만 직접 선택하세요.</li>
+      <li><b>기준 설정</b> — 허가면제 USD/수량 한도, 환율 해석 방식, 우려국가 목록을 조정합니다.</li>
+      <li><b>분석 실행</b> — 전략물자 선별 → 허가면제/허가 검증 → 무허가 의심건을 산출합니다.</li>
+      <li><b>검토 결과</b> — 심각도 순으로 정렬되며 통제번호·적용환율·허가/면제근거가 함께 표시됩니다. 엑셀로 내려받을 수 있습니다.</li>
+    </ol>
+    <p style="margin:14px 0 0;color:var(--muted);font-size:12px">모든 처리는 브라우저 안에서만 수행되며, 업로드한 데이터는 외부로 전송되지 않습니다.</p>
+  </div>
+  <div class="dlg-foot"><button class="primary" id="faqClose">닫기</button></div>
+</dialog>
 
 <script>
 "use strict";
@@ -714,6 +803,28 @@ document.getElementById("exportBtn").addEventListener("click",exportResults);
   document.getElementById(id).addEventListener("input",drawTable);
   document.getElementById(id).addEventListener("change",drawTable);
 });
+
+// FAQ 다이얼로그
+const faqDlg=document.getElementById("faqDialog");
+document.getElementById("faqBtn").addEventListener("click",()=>faqDlg.showModal());
+document.getElementById("faqClose").addEventListener("click",()=>faqDlg.close());
+faqDlg.addEventListener("click",e=>{ if(e.target===faqDlg) faqDlg.close(); });
+
+// 스텝 칩: 부드러운 스크롤 + 현재 위치 하이라이트(스크롤 스파이)
+const chips=[...document.querySelectorAll(".chip")];
+chips.forEach(c=>c.addEventListener("click",e=>{
+  const el=document.getElementById(c.dataset.target);
+  if(el && el.style.display==="none"){ e.preventDefault(); } // 아직 안 보이는 단계는 이동 생략
+}));
+const spy=()=>{
+  let cur=chips[0];
+  for(const c of chips){
+    const el=document.getElementById(c.dataset.target);
+    if(el && el.style.display!=="none" && el.getBoundingClientRect().top<=140) cur=c;
+  }
+  chips.forEach(c=>c.classList.toggle("active",c===cur));
+};
+window.addEventListener("scroll",spy,{passive:true});
 </script>
 </body>
 </html>
