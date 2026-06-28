@@ -555,10 +555,14 @@ function runAnalysis(){
         }
       } else if(lic.match){
         status="LIC_OK"; msg=`허가: ${lic.match.rawCountry||"-"} / 유효 ~${fmtDate(lic.match.end)}`;
-      } else if(lic.modelFound && !lic.inDate){
+      } else if(lic.modelFound && lic.countryFound && !lic.inDate){
+        // 해당 국가 허가는 있으나 수출일이 유효기간 밖 → 진짜 '기간외'
         status="LIC_EXPIRED";
-        msg=`모델 허가는 있으나 ${lic.countryFound?"수출일이 유효기간 밖":"국가 불일치"}`
-          + (lic.sample?` (예: ~${fmtDate(lic.sample.end)})`:"");
+        msg=`해당 국가 허가는 있으나 수출일이 유효기간 밖`
+          + (lic.sample?` (유효 ~${fmtDate(lic.sample.end)})`:"");
+      } else if(lic.modelFound && !lic.countryFound){
+        // 통제품목 허가는 있으나 '이 국가'에 대한 허가가 없음 → 무허가 의심
+        status="SUSPECT"; msg="해당 국가 허가 없음(타 국가 허가만 존재) → 무허가 의심";
       } else {
         status="SUSPECT"; msg="전략물자 해당이나 허가·면제 기록 없음";
       }
