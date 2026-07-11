@@ -148,6 +148,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   code{background:var(--accent-soft);padding:1px 6px;border-radius:5px;font-size:11px;color:var(--accent)}
   .warnbanner{background:#FBF3E2;border:1px solid #E3C98C;color:#8f5e15;
     padding:10px 14px;border-radius:10px;font-size:12.5px;margin-bottom:14px}
+  .riskbanner{background:#F8E1DC;border:1.5px solid #D98D7E;color:#8f2a1c;
+    padding:11px 14px;border-radius:10px;font-size:13px;margin-bottom:14px;line-height:1.7}
   .footnote{max-width:1280px;margin:8px auto 0;padding:0 28px;text-align:center;color:var(--muted);font-size:12px}
 
   /* ===== 모바일 대응 (≤640px) ===== */
@@ -273,6 +275,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   <section class="panel" id="resultpanel" style="display:none">
     <h2><span class="step-no">5</span> 검토 결과</h2>
     <div class="divider"></div>
+    <div id="riskWarn"></div>
     <div id="rateWarn"></div>
     <div class="summary" id="summary"></div>
     <div class="toolbar">
@@ -287,6 +290,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     <details class="legend" open>
       <summary>판정 상태 설명 (심각도 순)</summary>
       <ul>
+        <li><span class="badge b-bad">🚨 고위험 키워드</span> 자재코드·거래품명·규격에서 고위험 품목 키워드(공작기계·GPU·기지국 등 18종) 감지 — <b>판정 상태와 무관하게 우선 확인</b></li>
         <li><span class="badge b-bad">무허가·우려국</span> 전략물자 해당·허가/면제 없음 + 도착국이 우려·제재국 → <b>최우선 확인</b></li>
         <li><span class="badge b-bad">무허가(기록없음)</span> 전략물자 해당이나 허가·면제 기록이 전혀 없음</li>
         <li><span class="badge b-bad">무허가(국가불일치)</span> 통제품목 허가는 있으나 <b>해당 수출국에 대한 허가가 없음</b>(타 국가 허가만 존재)</li>
@@ -332,6 +336,9 @@ const FILES = {
     fields:[
       {k:"declNo", l:"수출신고번호", req:true, kw:["수출신고번호","신고번호","신고필증","수리번호","b/l","blno"]},
       {k:"model",  l:"모델·규격",   req:true, kw:["모델","규격","품명","상품명","modelname","품목"]},
+      {k:"matCode",l:"자재코드(선택)", req:false, kw:["자재코드","자재번호","materialcode","matcode"]},
+      {k:"tradeName",l:"거래품명(선택)", req:false, kw:["거래품명","commodity"]},
+      {k:"hsCode", l:"HS Code(선택)", req:false, kw:["hscode","hs부호","hs코드","세번부호","세번"]},
       {k:"qty",    l:"수량",        req:false,kw:["수량","qty","quantity","수출수량"]},
       {k:"amount", l:"결제금액(현지화)", req:false, kw:["결제금액","송장금액","인보이스","invoiceamount","금액","amount"]},
       {k:"currency",l:"결제통화",   req:false, kw:["통화","통화코드","결제통화","currency","화폐"]},
@@ -648,6 +655,58 @@ function buildExemptIndex(){
   return map;
 }
 
+// ---------- 고위험 품목 키워드 선별 ----------
+// 자재코드·거래품명·모델규격 텍스트에서 대소문자 구분 없이 탐지해 경고 태그를 부여한다.
+// 단어경계 매칭: 키워드 양끝이 영숫자면 바로 옆에 영숫자가 붙은 경우 제외
+//   ("L4"가 "L40"에, "Server"가 "Observer"에 걸리지 않음). 영문 키워드는 복수형 -s 허용,
+//   공백은 붙여쓰기·하이픈 표기도 허용(Clean Room ↔ CleanRoom ↔ Clean-Room).
+// hsPrefix: 같은 행 HS Code가 해당 값으로 시작할 때만 인정 / hsEquals: HS Code 일치만으로 인정
+// skipIfTags: 나열된 태그가 이미 잡힌 행은 건너뜀(기지국 14→15→16 우선순위)
+const HIGHRISK_RULES=[
+  {tag:"3차원측정기", kws:["3D Scanner","Inspector 3D","3D Inspector","CMM","Coordinate Measuring Machine"]},
+  {tag:"열화상 카메라", kws:["Camera Thermal","Thermal Box","Thermal Imaging Camera","Thermal Camera","Thermal Imager"]},
+  {tag:"공작기계", kws:["CNC","Computer Numerical Control","M/C Milling","Milling","Milling Machine","Milling M/C",
+    "5-Axis Laser Cutting Machine","Machining Center","Machine Tool","Turning Machine","Turning M/C",
+    "Grinding M/C","Grinding Machine","Grinder","EDM","Electrical Discharge Machine"]},
+  {tag:"클린룸", kws:["Wet Station","Clean Room","Cleanroom"]},
+  {tag:"오실로스코프", kws:["Oscilloscpoe","Oscilloscope"]}, // 원문 철자 + 정상 철자 모두
+  {tag:"주파수변환기", kws:["Converters","Harmonic Mixers","Harmonic Mixer","Frequency Converter","Frequency Changer"]},
+  {tag:"신호분석기", kws:["Signal Analyzer","Spectrum Analyzer"]},
+  {tag:"신호발생기", kws:["Signal Generator","Waveform Generator"]},
+  {tag:"회로망분석기", kws:["Network Analyzer"]},
+  {tag:"3D 프린터", kws:["Additive Manufacturing Equipment","Additive Manufacturing","3D Printer","3D Printing"]},
+  {tag:"워크스테이션(GPU 포함 확인필요)", kws:["Workstaion","Workstation","Work Station"]}, // 원문 철자 + 정상 철자
+  {tag:"서버(GPU 포함 확인필요)", kws:["Server"]},
+  {tag:"이더넷 스위치", kws:["Ethernet Switch"]},
+  {tag:"네트워크 기지국", kws:["Radio Unit","Digital Unit","Base Station","Network Equipment","Main Card","Channel Card"]},
+  {tag:"기지국(모델코드)", kws:["SLS-","SFG-","SMM-"], skipIfTags:["네트워크 기지국"]},
+  {tag:"기지국(HS code)", hsEquals:["8517792000"], skipIfTags:["네트워크 기지국","기지국(모델코드)"]},
+  {tag:"GPU", hsPrefix:["84","85"], kws:["Nvidia","GPU","GPU Server","B.Ultra","GB300","B200","B100","H200","H100","H800",
+    "L40S","L4","L40","A800","A100","RTX","MI325X","MI300X","MI250X","NPU","TPU","RNGD","V100","P100","M60","P40","K80","MI25"]},
+  {tag:"FPGA", hsPrefix:["84","85"], kws:["FPGA"]}
+];
+function kwToRegex(kw){
+  let e=kw.replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/\s+/g,"[\\s\\-_.]*");
+  if(/^[A-Za-z0-9]/.test(kw)) e="(?<![A-Za-z0-9])"+e;
+  if(/[A-Za-z]$/.test(kw)) e+="s?(?![A-Za-z0-9])";
+  else if(/[0-9]$/.test(kw)) e+="(?![A-Za-z0-9])";
+  return new RegExp(e,"i");
+}
+HIGHRISK_RULES.forEach(r=>{ if(r.kws) r.res=r.kws.map(kwToRegex); });
+const hsDigits=v=>String(v==null?"":v).replace(/[^0-9]/g,"");
+function matchHighRisk(text,hs){
+  const tags=[];
+  for(const r of HIGHRISK_RULES){
+    if(r.skipIfTags && r.skipIfTags.some(t=>tags.includes(t))) continue;
+    let hit=false;
+    if(r.res) hit=r.res.some(re=>re.test(text));
+    if(hit && r.hsPrefix) hit=!!hs && r.hsPrefix.some(p=>hs.startsWith(p));
+    if(!r.res && r.hsEquals) hit=r.hsEquals.includes(hs);
+    if(hit) tags.push(r.tag);
+  }
+  return tags;
+}
+
 // ---------- 분석 실행 ----------
 // 심각도 순서(위→아래). flag=확인필요. card=요약카드 색상.
 const STATUS={
@@ -691,6 +750,12 @@ function runAnalysis(){
     const date=em.date? parseDate(r[em.date]):null;
     const country=em.country? r[em.country]:"";
     const countryN=norm(country);
+
+    // 고위험 품목 키워드 선별 (자재코드·거래품명·모델규격 + HS Code)
+    const matCode=em.matCode? r[em.matCode]:"";
+    const tradeName=em.tradeName? r[em.tradeName]:"";
+    const hs=em.hsCode? hsDigits(r[em.hsCode]):"";
+    const highRisk=matchHighRisk([matCode,tradeName,model].map(v=>String(v==null?"":v)).join(" | "), hs).join(" · ");
 
     // USD 금액 산출 (USD컬럼 우선)
     let usd=null, usdNote="";
@@ -756,7 +821,7 @@ function runAnalysis(){
     }
     if(status==="NO_USD") missingRate=true;
     return {i:i+1, declNo, model, qty, amount, currency, usd, usdNote,
-            country, date:fmtDate(date), status, msg, ctrlNo, judgeType, evidence,
+            country, date:fmtDate(date), status, msg, ctrlNo, judgeType, evidence, hs, highRisk,
             judge:j?(j.isStrategic?"해당":"비해당"):(status==="UNJUDGED_SIMILAR"?"유사존재":"미등재")};
   });
 
@@ -772,6 +837,17 @@ function renderResults(missingRate){
     ? `<div class="warnbanner">⚠ 일부 건의 USD 산출에 실패했습니다. 환율표(⑤)를 업로드하면 현지화 금액을 USD로 환산해 면제 한도검증이 가능합니다.</div>`
     : (missingRate? `<div class="warnbanner">⚠ 일부 통화/일자가 환율표에 없어 USD 산출이 안 된 건이 있습니다.</div>`:"");
 
+  // 고위험 품목 키워드 경고 배너
+  const hrRows=RESULTS.filter(r=>r.highRisk);
+  const rk=document.getElementById("riskWarn");
+  if(hrRows.length){
+    const byTag={};
+    hrRows.forEach(r=>r.highRisk.split(" · ").forEach(t=>byTag[t]=(byTag[t]||0)+1));
+    rk.innerHTML=`<div class="riskbanner">🚨 <b>고위험 품목 키워드 ${hrRows.length}건 감지</b> — `
+      +Object.entries(byTag).map(([t,n])=>`${t} ${n}건`).join(" · ")
+      +`. 전략물자 해당 가능성이 있는 품목입니다. 판정·허가 여부를 우선 확인하세요.</div>`;
+  } else rk.innerHTML="";
+
   // 요약
   const counts={};
   RESULTS.forEach(r=>counts[r.status]=(counts[r.status]||0)+1);
@@ -779,6 +855,7 @@ function renderResults(missingRate){
   const sum=document.getElementById("summary");
   const flagged=RESULTS.filter(r=>STATUS[r.status].flag).length;
   let cards=`<div class="card ${flagged?'bad':'ok'}"><div class="num">${flagged}</div><div class="lbl">확인 필요 합계</div></div>
+             <div class="card ${hrRows.length?'bad':''}"><div class="num">${hrRows.length}</div><div class="lbl">고위험 키워드</div></div>
              <div class="card"><div class="num">${RESULTS.length}</div><div class="lbl">총 신고건</div></div>`;
   cards+=order.filter(s=>counts[s]).map(s=>{
     const st=STATUS[s];
@@ -799,24 +876,25 @@ function drawTable(){
   const flagOnly=document.getElementById("flagOnly").checked;
   const thead=document.querySelector("#resultTable thead");
   const tbody=document.querySelector("#resultTable tbody");
-  thead.innerHTML=`<tr><th>#</th><th>상태</th><th>수출신고번호</th><th>모델·규격</th><th>판정</th>
+  thead.innerHTML=`<tr><th>#</th><th>상태</th><th>고위험</th><th>수출신고번호</th><th>모델·규격</th><th>판정</th>
     <th>통제번호</th><th>판정구분</th><th>도착국</th><th>신고일</th><th>수량</th><th>결제금액</th><th>통화</th>
-    <th>USD</th><th>적용환율</th><th>허가·면제근거</th><th>근거/메모</th></tr>`;
-  // 심각도(상태 정의 순서) 우선 정렬
+    <th>USD</th><th>적용환율</th><th>HS부호</th><th>허가·면제근거</th><th>근거/메모</th></tr>`;
+  // 심각도(상태 정의 순서) 우선 정렬, 같은 상태 안에서는 고위험 우선
   const rank=s=>STATUS_ORDER.indexOf(s);
   const rows=RESULTS.filter(r=>{
-    if(flagOnly && !STATUS[r.status].flag) return false;
+    if(flagOnly && !STATUS[r.status].flag && !r.highRisk) return false;
     if(fStatus && r.status!==fStatus) return false;
-    if(txt){ const hay=`${r.declNo} ${r.model} ${r.country} ${r.ctrlNo} ${r.evidence}`.toLowerCase(); if(!hay.includes(txt)) return false; }
+    if(txt){ const hay=`${r.declNo} ${r.model} ${r.country} ${r.ctrlNo} ${r.evidence} ${r.highRisk} ${r.hs}`.toLowerCase(); if(!hay.includes(txt)) return false; }
     return true;
-  }).sort((a,b)=>rank(a.status)-rank(b.status)|| a.i-b.i);
+  }).sort((a,b)=>rank(a.status)-rank(b.status)|| (b.highRisk?1:0)-(a.highRisk?1:0) || a.i-b.i);
 
-  if(!rows.length){ tbody.innerHTML=`<tr><td colspan="16" class="empty">해당 결과 없음</td></tr>`; return; }
+  if(!rows.length){ tbody.innerHTML=`<tr><td colspan="18" class="empty">해당 결과 없음</td></tr>`; return; }
   tbody.innerHTML=rows.map(r=>{
     const st=STATUS[r.status];
-    return `<tr class="${st.flag?'flagged':''}">
+    return `<tr class="${st.flag||r.highRisk?'flagged':''}">
       <td>${r.i}</td>
       <td><span class="badge ${st.c}">${st.l}</span></td>
+      <td>${r.highRisk?`<span class="badge b-bad">🚨 ${r.highRisk}</span>`:""}</td>
       <td>${r.declNo??""}</td>
       <td>${r.model??""}</td>
       <td>${r.judge}</td>
@@ -829,6 +907,7 @@ function drawTable(){
       <td>${r.currency??""}</td>
       <td>${r.usd!=null?r.usd.toLocaleString(undefined,{maximumFractionDigits:2}):"-"}</td>
       <td class="msg">${r.usdNote||""}</td>
+      <td>${r.hs||""}</td>
       <td class="msg">${r.evidence||""}</td>
       <td class="msg">${r.msg}</td></tr>`;
   }).join("");
@@ -837,12 +916,12 @@ function drawTable(){
 // ---------- 결과 내보내기 ----------
 function exportResults(){
   if(!RESULTS.length) return;
-  const data=[...RESULTS].sort((a,b)=>STATUS_ORDER.indexOf(a.status)-STATUS_ORDER.indexOf(b.status)||a.i-b.i).map(r=>({
-    "#":r.i, "판정상태":STATUS[r.status].l, "확인필요":STATUS[r.status].flag?"Y":"",
+  const data=[...RESULTS].sort((a,b)=>STATUS_ORDER.indexOf(a.status)-STATUS_ORDER.indexOf(b.status)||(b.highRisk?1:0)-(a.highRisk?1:0)||a.i-b.i).map(r=>({
+    "#":r.i, "판정상태":STATUS[r.status].l, "고위험품목":r.highRisk, "확인필요":(STATUS[r.status].flag||r.highRisk)?"Y":"",
     "수출신고번호":r.declNo, "모델·규격":r.model, "전략물자판정":r.judge,
     "통제번호":r.ctrlNo, "판정구분":r.judgeType, "도착국":r.country, "신고일":r.date, "수량":r.qty,
     "결제금액":r.amount, "통화":r.currency, "USD환산":r.usd!=null?Number(r.usd.toFixed(2)):"",
-    "적용환율":r.usdNote, "허가·면제근거":r.evidence, "근거/메모":r.msg
+    "적용환율":r.usdNote, "HS부호":r.hs, "허가·면제근거":r.evidence, "근거/메모":r.msg
   }));
   const ws=XLSX.utils.json_to_sheet(data);
   const wb=XLSX.utils.book_new();
