@@ -97,6 +97,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   .filebox .status.ok{color:var(--ok);font-weight:600}
   .sheetsel{margin-top:8px;display:none}
   .sheetsel.show{display:block}
+  .hdrsel{margin-top:6px;display:none;font-size:12px;color:var(--muted)}
+  .hdrsel.show{display:block}
+  .hdrsel input{width:64px}
+  .hdrhint{font-size:11px;color:var(--muted)}
   select,input[type=number],input[type=text]{background:var(--panel);color:var(--txt);
     border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit}
   select:focus,input:focus{outline:none;border-color:var(--accent)}
@@ -357,6 +361,16 @@ const FILES = {
       {k:"type",   l:"판정구분(선택)", req:false, kw:["판정구분","구분","자가","전문","type"]}
     ]
   },
+  judge2: {
+    title:"②-2 판정DB 추가", required:false,
+    desc:"자가판정·전문판정이 별도 파일이면 두 번째 판정DB를 업로드 (②와 병합되어 함께 검색)",
+    fields:[
+      {k:"model",  l:"모델명",   req:true, kw:["모델","규격","품명","품목","modelname"]},
+      {k:"result", l:"판정결과", req:true, kw:["판정결과","판정","해당여부","결과","result","해당"]},
+      {k:"control",l:"통제번호(선택)", req:false, kw:["통제번호","통제","eccn","ccln"]},
+      {k:"type",   l:"판정구분(선택)", req:false, kw:["판정구분","구분","자가","전문","type"]}
+    ]
+  },
   exempt: {
     title:"③ 허가면제 신고번호", required:false,
     desc:"허가면제를 받은 수출건의 수출신고번호 목록 (한도 컬럼 있으면 함께 인식)",
@@ -427,6 +441,7 @@ function buildFileBoxes(){
       <div class="desc">${f.desc}</div>
       <input type="file" accept=".xlsx,.xls,.csv" data-file="${id}">
       <div class="sheetsel" id="sheet-${id}">시트: <select data-sheet="${id}"></select></div>
+      <div class="hdrsel" id="hdr-${id}">머리글 행: <input type="number" min="1" value="1" data-hdr="${id}"> <span class="hdrhint">자동감지 — 틀리면 직접 수정</span></div>
       <div class="status" id="status-${id}">미선택</div>`;
     grid.appendChild(box);
   }
@@ -434,6 +449,44 @@ function buildFileBoxes(){
   grid.querySelectorAll('select[data-sheet]').forEach(sel=>sel.addEventListener("change",e=>{
     const id=e.target.dataset.sheet; loadSheet(id, e.target.value);
   }));
+  grid.querySelectorAll('input[data-hdr]').forEach(inp=>inp.addEventListener("change",e=>{
+    const id=e.target.dataset.hdr;
+    if(!state[id]||!state[id].sheetName) return;
+    loadSheet(id, state[id].sheetName, (parseInt(e.target.value)||1)-1);
+  }));
+}
+
+// 한글 깨짐 감지용: 앞쪽 셀 텍스트 표본
+function sampleText(wb){
+  let s="";
+  for(const n of wb.SheetNames.slice(0,2)){
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:"",raw:false,blankrows:false}).slice(0,5);
+    aoa.forEach(r=>(r||[]).forEach(c=>s+=String(c==null?"":c)));
+    if(s.length>500) break;
+  }
+  return s;
+}
+// EUC-KR(CP949) 인코딩 CSV/XLS 대응: 기본 읽기에서 한글이 깨지면 codepage 949로 재시도
+function readWorkbook(arr){
+  let wb=XLSX.read(arr,{type:"array",cellDates:true});
+  const s=sampleText(wb);
+  const latinNoise=(s.match(/[\u0080-\u00FF]/g)||[]).length;
+  let hangul=(s.match(/[가-힣]/g)||[]).length;
+  if(latinNoise>2 && latinNoise>hangul){
+    // 2차: 바이너리(xls) 대상 codepage 949 재시도
+    try{
+      const wb2=XLSX.read(arr,{type:"array",cellDates:true,codepage:949});
+      const h2=(sampleText(wb2).match(/[가-힣]/g)||[]).length;
+      if(h2>hangul){ wb=wb2; hangul=h2; }
+    }catch(err){}
+    // 3차: 텍스트(csv/html) 대상 EUC-KR 직접 디코드 후 재파싱
+    try{
+      const txt=new TextDecoder("euc-kr").decode(arr);
+      const wb3=XLSX.read(txt,{type:"string",cellDates:true});
+      if((sampleText(wb3).match(/[가-힣]/g)||[]).length>hangul) wb=wb3;
+    }catch(err){}
+  }
+  return wb;
 }
 
 function onFile(e){
@@ -442,7 +495,7 @@ function onFile(e){
   const reader=new FileReader();
   reader.onload=ev=>{
     try{
-      const wb=XLSX.read(ev.target.result,{type:"array",cellDates:true});
+      const wb=readWorkbook(ev.target.result);
       state[id]={workbook:wb};
       const sheetSel=document.querySelector(`select[data-sheet="${id}"]`);
       sheetSel.innerHTML=wb.SheetNames.map(n=>`<option>${n}</option>`).join("");
@@ -453,15 +506,74 @@ function onFile(e){
   reader.readAsArrayBuffer(file);
 }
 
-function loadSheet(id, sheetName){
+// ERP/관세청 수출 엑셀은 시트 범위(!ref)가 실제 데이터보다 작게 기록된 경우가 있어
+// 셀 주소를 훑어 범위를 실제 크기로 복구한다 (0행 로드 문제의 주원인)
+function fixSheetRange(ws){
+  let maxR=0,maxC=0,found=false;
+  for(const k in ws){
+    if(k[0]==="!") continue;
+    const c=XLSX.utils.decode_cell(k);
+    if(!c||isNaN(c.r)) continue;
+    found=true;
+    if(c.r>maxR)maxR=c.r; if(c.c>maxC)maxC=c.c;
+  }
+  if(found) ws["!ref"]=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR,c:maxC}});
+}
+
+// 머리글 행 자동 감지: 상위 15행 중 '채워진 텍스트 셀 + 헤더 단어'가 가장 많은 행
+const HEADER_HINTS=["신고번호","수리번호","자재","모델","규격","품명","품목","거래","수량","단위","금액","통화",
+  "일자","날짜","국가","도착","판정","통제","허가","면제","환율","적용","세번","hscode","hs부호",
+  "date","qty","quantity","amount","currency","model","country","code"];
+function detectHeaderRow(aoa){
+  let best=0,bestScore=-1;
+  const lim=Math.min(aoa.length,15);
+  for(let i=0;i<lim;i++){
+    const cells=(aoa[i]||[]).map(c=>String(c==null?"":c).trim());
+    const nonEmpty=cells.filter(Boolean);
+    if(nonEmpty.length<2) continue;
+    const textCells=nonEmpty.filter(c=>isNaN(Number(c))).length;
+    let hint=0;
+    cells.forEach(c=>{const k=headKey(c); if(k && HEADER_HINTS.some(h=>k.includes(h))) hint++;});
+    const score=nonEmpty.length+textCells+hint*3;
+    if(score>bestScore){bestScore=score;best=i;}
+  }
+  return best;
+}
+
+// 빈 머리글은 '열N'으로, 중복 머리글은 _2, _3…으로 구분해 매핑 가능하게 만든다
+function normalizeHeaders(cells){
+  const seen={};
+  return cells.map((c,i)=>{
+    let h=String(c==null?"":c).trim().replace(/\s+/g," ");
+    if(!h) h="열"+(i+1);
+    if(seen[h]!=null){ seen[h]++; h=h+"_"+seen[h]; } else seen[h]=1;
+    return h;
+  });
+}
+
+function loadSheet(id, sheetName, hdrOverride){
   const wb=state[id].workbook;
   const ws=wb.Sheets[sheetName];
-  const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});
-  const headers = rows.length? Object.keys(rows[0]) : [];
-  state[id]={...state[id], rows, headers, sheetName};
+  fixSheetRange(ws);
+  // 배열로 읽어(빈 행 유지 → 행번호=엑셀 행) 머리글 행을 찾은 뒤 객체로 변환
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:"",raw:true,blankrows:true});
+  const hIdx=(hdrOverride!=null && hdrOverride>=0)? Math.min(hdrOverride,Math.max(aoa.length-1,0)) : detectHeaderRow(aoa);
+  const width=aoa.reduce((m,r)=>Math.max(m,(r||[]).length),0);
+  const hRow=(aoa[hIdx]||[]).slice();
+  while(hRow.length<width) hRow.push("");
+  const headers=normalizeHeaders(hRow);
+  const rows=aoa.slice(hIdx+1)
+    .filter(r=>(r||[]).some(c=>c!==""&&c!=null))
+    .map(r=>{const o={};headers.forEach((h,i)=>o[h]=r[i]!==undefined?r[i]:"");return o;});
+  state[id]={...state[id], rows, headers, sheetName, headerRow:hIdx};
   autoMap(id);
-  setStatus(id, `${rows.length}행 · ${headers.length}열 로드`, true);
-  document.getElementById("box-"+id).classList.add("loaded");
+  const hdrBox=document.getElementById("hdr-"+id);
+  hdrBox.classList.add("show");
+  hdrBox.querySelector("input").value=hIdx+1;
+  setStatus(id, rows.length
+    ? `${rows.length}행 · ${headers.length}열 로드 (머리글 ${hIdx+1}행)`
+    : `0행 로드 — 머리글 행 번호를 확인하거나 시트를 바꿔보세요`, rows.length>0);
+  document.getElementById("box-"+id).classList.toggle("loaded",rows.length>0);
   refreshUI();
 }
 
@@ -520,12 +632,14 @@ function refreshUI(){
 
 function validateRun(){
   const btn=document.getElementById("runBtn");
-  let ok = state.export&&state.export.rows && state.judge&&state.judge.rows;
-  // 필수 매핑 확인
+  let ok = state.export&&state.export.rows&&state.export.rows.length>0
+        && state.judge&&state.judge.rows&&state.judge.rows.length>0;
+  // 업로드된 모든 파일의 필수(★) 매핑 확인
   if(ok){
-    for(const id of ["export","judge"]){
+    for(const id in FILES){
+      const st=state[id]; if(!st||!st.rows||!st.rows.length) continue;
       for(const fld of FILES[id].fields){
-        if(fld.req && !state[id].mapping[fld.k]){ ok=false; }
+        if(fld.req && !st.mapping[fld.k]){ ok=false; }
       }
     }
   }
@@ -574,15 +688,20 @@ function toUSD(amount, currency, date, rateIdx, mode){
 
 // ---------- 판정DB 인덱스 ----------
 function buildJudgeIndex(){
-  const st=state.judge, m=st.mapping, idx=[];
-  for(const r of st.rows){
-    const model=r[m.model]; if(model==="") continue;
-    const res=String(r[m.result]||"");
-    // 비해당/해당 판단
-    const isNo = /비해당|해당없|불해당|아니|n\/?a|no\b|미해당/i.test(res) || /비대상/i.test(res);
-    const isYes = !isNo && /해당|대상|yes|y\b|전략/i.test(res);
-    idx.push({modelN:norm(model), raw:model, result:res, isStrategic: isYes && !isNo, decided:true,
-              control: m.control? r[m.control]:"", type: m.type? r[m.type]:""});
+  const idx=[];
+  // ②와 ②-2(자가/전문판정 별도 파일)를 병합해 하나의 판정DB로 검색
+  for(const id of ["judge","judge2"]){
+    const st=state[id]; if(!st||!st.rows) continue;
+    const m=st.mapping; if(!m.model||!m.result) continue;
+    for(const r of st.rows){
+      const model=r[m.model]; if(model===""||model==null) continue;
+      const res=String(r[m.result]||"");
+      // 비해당/해당 판단
+      const isNo = /비해당|해당없|불해당|아니|n\/?a|no\b|미해당/i.test(res) || /비대상/i.test(res);
+      const isYes = !isNo && /해당|대상|yes|y\b|전략/i.test(res);
+      idx.push({modelN:norm(model), raw:model, result:res, isStrategic: isYes && !isNo, decided:true,
+                control: m.control? r[m.control]:"", type: m.type? r[m.type]:""});
+    }
   }
   return idx;
 }
